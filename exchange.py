@@ -10,13 +10,16 @@ load_dotenv()
 
 
 def get_exchange():
-    mode       = os.getenv('OKX_MODE', 'demo')
+    api_key    = os.environ.get('OKX_API_KEY') or os.getenv('OKX_API_KEY')
+    secret_key = os.environ.get('OKX_SECRET_KEY') or os.getenv('OKX_SECRET_KEY')
+    passphrase = os.environ.get('OKX_PASSPHRASE') or os.getenv('OKX_PASSPHRASE')
+    mode       = os.environ.get('OKX_MODE') or os.getenv('OKX_MODE', 'demo')
     is_sandbox = (mode == 'demo')
 
     exchange = ccxt.okx({
-        'apiKey'  : os.getenv('OKX_API_KEY'),
-        'secret'  : os.getenv('OKX_SECRET_KEY'),
-        'password': os.getenv('OKX_PASSPHRASE'),
+        'apiKey'  : api_key,
+        'secret'  : secret_key,
+        'password': passphrase,
         'sandbox' : is_sandbox,
         'options' : {'defaultType': 'spot'},
     })
