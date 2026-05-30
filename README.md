@@ -1,0 +1,2 @@
+# okx-scalp-bot
+bot
