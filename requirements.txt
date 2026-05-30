@@ -1,0 +1,7 @@
+ccxt
+pandas
+ta
+python-dotenv
+schedule
+colorama
+openpyxl
