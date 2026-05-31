@@ -1,19 +1,21 @@
 # ============================
 #   MAIN BOT LOOP
-#   Strategy: EMA+RSI+BB + H1 Trend Filter
+#   With Telegram + Dashboard
 # ============================
 
 import time
 import schedule
 from datetime import datetime, timezone
 
-from exchange   import get_exchange, get_balance, get_candles, test_connection
-from indicators import build_dataframe, calculate_indicators, calculate_h1_trend, get_latest
-from strategy   import get_signal, describe_market
-from risk       import calculate_trade, is_trade_allowed
-from trader     import place_order, get_open_trades
-from logger     import log_trade, create_log_file
-from config     import (
+from exchange      import get_exchange, get_balance, get_candles, test_connection
+from indicators    import build_dataframe, calculate_indicators, calculate_h1_trend, get_latest
+from strategy      import get_signal, describe_market
+from risk          import calculate_trade, is_trade_allowed
+from trader        import place_order, get_open_trades, monitor_positions
+from logger        import log_trade, create_log_file
+from telegram_bot  import alert_trade_opened, alert_bot_started, send_message
+from dashboard     import print_dashboard, get_telegram_summary
+from config        import (
     SYMBOLS, TIMEFRAME, CANDLE_LIMIT,
     HTF_TIMEFRAME, HTF_CANDLES,
     MAX_OPEN_TRADES, USE_TIME_FILTER,
@@ -23,6 +25,7 @@ from config     import (
 # Cooldown tracker
 last_trade_time = {}
 COOLDOWN_MINUTES = 15
+run_count        = 0
 
 
 def is_trading_time():
@@ -45,8 +48,11 @@ def is_cooldown_active(symbol):
 
 
 def run_bot():
+    global run_count
+    run_count += 1
+
     print("\n" + "=" * 45)
-    print(f"   🤖 BOT RUN — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"   🤖 BOT RUN #{run_count} — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 45)
 
     if not is_trading_time():
@@ -67,41 +73,41 @@ def run_bot():
     open_trades = get_open_trades(exchange, SYMBOLS)
     print(f"   📂 Open trades: {open_trades}/{MAX_OPEN_TRADES}")
 
+    # Monitor existing positions
+    monitor_positions(exchange)
+
+    # Print dashboard every 12 runs (1 hour)
+    if run_count % 12 == 0:
+        print_dashboard()
+        send_message(get_telegram_summary())
+
     for symbol in SYMBOLS:
         print(f"\n🪙  Checking {symbol}...")
 
         if is_cooldown_active(symbol):
             continue
 
-        # Fetch M5 candles
         candles = get_candles(exchange, symbol, TIMEFRAME, CANDLE_LIMIT)
         if candles is None:
             print(f"   ⚠️  No candle data — skipping")
             continue
 
-        # Fetch H1 candles for trend filter
         candles_h1 = get_candles(exchange, symbol, HTF_TIMEFRAME, HTF_CANDLES)
         if candles_h1 is None:
             print(f"   ⚠️  No H1 data — skipping")
             continue
 
-        # Calculate indicators
         df         = build_dataframe(candles)
         df         = calculate_indicators(df)
         last, prev = get_latest(df)
+        h1_trend   = calculate_h1_trend(candles_h1)
 
-        # Get H1 trend
-        h1_trend = calculate_h1_trend(candles_h1)
-
-        # Show market summary
         describe_market(last, h1_trend)
 
-        # Skip if H1 neutral
         if h1_trend == 'neutral':
             print(f"   Signal: ➡️  H1 NEUTRAL — Skipping")
             continue
 
-        # Get signal
         signal = get_signal(last, prev, h1_trend)
 
         if signal is None:
@@ -123,6 +129,7 @@ def run_bot():
             open_trades += 1
             last_trade_time[symbol] = datetime.now()
             log_trade(symbol, signal, last['close'], qty, sl, tp, order['id'])
+            alert_trade_opened(symbol, signal, last['close'], qty, sl, tp)
             print(f"\n   ✅ Trade opened!")
             print(f"   Qty: {qty} | SL: {sl} | TP: {tp}")
             print(f"   ⏳ Cooldown started — next trade in {COOLDOWN_MINUTES} mins")
@@ -138,9 +145,11 @@ if __name__ == "__main__":
     print("\n" + "=" * 45)
     print("   🤖 OKX SCALP BOT STARTING...")
     print("   Strategy : EMA+RSI+BB + H1 Filter")
-    print("   Cooldown : 15 mins per symbol")
+    print("   Alerts   : Telegram enabled")
+    print("   Dashboard: Every 1 hour")
     print("=" * 45)
 
+    alert_bot_started()
     run_bot()
 
     schedule.every(5).minutes.do(run_bot)

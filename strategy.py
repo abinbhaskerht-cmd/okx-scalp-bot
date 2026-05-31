@@ -10,23 +10,15 @@ from config import (
 
 
 def get_signal(last, prev, h1_trend):
-    """
-    BUY:  H1 bullish + BB expanding + EMA bullish + RSI 50-65
-    SELL: H1 bearish + BB expanding + EMA bearish + RSI 35-50
-    """
-
     bb_expanding    = prev['bb_squeeze'] == True and last['bb_squeeze'] == False
     ema_bullish     = last['ema_fast'] > last['ema_slow']
-    ema_bearish     = last['ema_fast'] < last['ema_slow']
     rsi_buy         = RSI_BUY_MIN  < last['rsi'] < RSI_BUY_MAX
-    rsi_sell        = RSI_SELL_MIN < last['rsi'] < RSI_SELL_MAX
     price_above_mid = last['close'] > last['bb_mid']
-    price_below_mid = last['close'] < last['bb_mid']
 
+    # Spot trading — BUY only
     if h1_trend == 'bullish' and bb_expanding and ema_bullish and rsi_buy and price_above_mid:
         return 'buy'
-    if h1_trend == 'bearish' and bb_expanding and ema_bearish and rsi_sell and price_below_mid:
-        return 'sell'
+
     return None
 
 
